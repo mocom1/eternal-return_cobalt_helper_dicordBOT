@@ -1,1 +1,1 @@
-# cobalt_helper_dicordBOT
+# cobalt_helper
