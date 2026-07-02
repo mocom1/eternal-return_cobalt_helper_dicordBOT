@@ -1,4 +1,5 @@
-# cobalt_helper
+# ER_cobalt_helper 
+# 이터널리턴 코발트 디스코드 봇
 
 #이터널리턴  코발트 내전을 위한 디스코드봇입니다. 
 
