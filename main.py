@@ -214,8 +214,8 @@ async def recommend_character(ctx):
     # 2. 이터널리턴 오픈 API로 최근 전적 조회
     async with ctx.typing():
         try:
-            user_num = await er_api.get_user_num(nickname)
-            games = await er_api.get_user_games(user_num)
+            er_user_id = await er_api.get_user_id(nickname)
+            games = await er_api.get_user_games(er_user_id)
             names = await er_api.get_character_names()
         except ERAPIError as e:
             await ctx.send(f"❌ 전적 조회에 실패했습니다: {e}", silent=True)

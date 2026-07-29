@@ -43,16 +43,26 @@ class EternalReturnAPI:
                 raise ERAPIError(f"{data.get('code')}: {data.get('message')}")
             return data
 
-    async def get_user_num(self, nickname: str) -> int:
+    async def get_user_id(self, nickname: str) -> str:
+        """닉네임으로 유저 고유 ID를 조회합니다.
+
+        공식 문서(2021년 작성본)에는 이 필드가 숫자형 userNum으로 나와있지만,
+        실제 API 응답은 문자열 userId를 돌려준다 (2026년 기준 확인됨).
+        """
         data = await self._get("user/nickname", params={"query": nickname})
         user = data.get("user")
         if not user:
             raise ERAPIError(f"'{nickname}' 닉네임을 찾을 수 없습니다.")
-        return user["userNum"]
+        return user["userId"]
 
-    async def get_user_games(self, user_num: int) -> list[dict]:
-        """최근 90일간 유저의 전적(BattleUserResult 배열)을 가져옵니다."""
-        data = await self._get(f"user/games/{user_num}")
+    async def get_user_games(self, user_id: str) -> list[dict]:
+        """최근 90일간 유저의 전적(BattleUserResult 배열)을 가져옵니다.
+
+        문자열 userId로 조회할 때는 경로에 uid/ 를 붙여야 한다
+        (/v1/user/games/uid/{userId}). uid/ 없이 호출하면 숫자 userNum 전용
+        라우트(/v1/user/games/{userNum})로 매칭돼서 401이 난다.
+        """
+        data = await self._get(f"user/games/uid/{user_id}")
         return data.get("userGames", []) or []
 
     async def get_character_names(self) -> dict[int, str]:
