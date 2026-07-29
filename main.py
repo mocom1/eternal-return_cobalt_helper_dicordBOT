@@ -4,6 +4,8 @@ import os
 from dotenv import load_dotenv
 from database import load_db, save_db
 from elo import calculate_elo
+from er_api import ERAPIError, er_api
+from analysis import analyze_games, recommend_characters
 
 load_dotenv("token.env")
 
@@ -50,6 +52,7 @@ async def show_commands_list(ctx):
         f"🔹 `!정보` : 내 닉네임, 전적(승/패), 승률, 현재 MMR을 조회합니다.\n"
         f"🔹 `!인원` : 등록된 모든 내전 멤버들의 닉네임, 전적을 순서대로 조회합니다.\n"
         f"🔹 `!매칭` : 현재 통화방에 입장한 인원 기준으로 MMR 균형에 맞게 팀을 반반 나눕니다.\n"
+        f"🔹 `!추천` : 등록된 닉네임 기준 최근 전적을 분석해 주 실험체를 추천합니다.\n"
         f"🔹 `!명령어` : 현재 보고 계신 봇 사용 설명서를 다시 띄웁니다.\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"⚠️ *지정된 내전방 채널 외에서는 봇이 응답하지 않습니다.*"
@@ -189,6 +192,66 @@ async def show_all_users(ctx):
 
     await ctx.send(list_message, silent=True)
 
+
+
+# 7-1. 봇 명령어 등록: 전적 분석 기반 주 실험체 추천 기능
+@bot.command(name="추천")
+async def recommend_character(ctx):
+    """등록된 이터널리턴 닉네임 기준으로 최근 90일 전적을 분석해 주 실험체를 추천합니다."""
+    if ctx.channel.id != 내전방_ID:
+        return
+
+    # 1. 등록된 유저인지 확인 (등록된 닉네임을 그대로 재사용)
+    user_db = load_db()
+    user_id = str(ctx.author.id)
+
+    if user_id not in user_db:
+        await ctx.send(f"❌ {ctx.author.mention} 님은 아직 등록되지 않았습니다! `!등록 [이터널리턴 닉네임]`으로 먼저 등록해 주세요.", silent=True)
+        return
+
+    nickname = user_db[user_id]["nickname"]
+
+    # 2. 이터널리턴 오픈 API로 최근 전적 조회
+    async with ctx.typing():
+        try:
+            user_num = await er_api.get_user_num(nickname)
+            games = await er_api.get_user_games(user_num)
+            names = await er_api.get_character_names()
+        except ERAPIError as e:
+            await ctx.send(f"❌ 전적 조회에 실패했습니다: {e}", silent=True)
+            return
+
+    if not games:
+        await ctx.send(f"📭 '{nickname}'님의 최근 90일간 전적이 없습니다.", silent=True)
+        return
+
+    # 3. 전적 분석 및 캐릭터별 점수 계산 (승률 50% + TOP3율 30% + 평균순위 20%)
+    overall = analyze_games(games)
+    recommended = recommend_characters(overall)
+
+    def char_label(character_num: int) -> str:
+        name = names.get(character_num)
+        return f"{name} (#{character_num})" if name else f"실험체 #{character_num}"
+
+    # 4. 디코방에 이쁘게 정렬해서 출력하기
+    msg = f"🎯 **{nickname}님의 주 실험체 추천** (최근 {overall.games}판)\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += (
+        f"전체 승률 {overall.win_rate * 100:.1f}% · "
+        f"TOP3 {overall.top3_rate * 100:.1f}% · "
+        f"평균 순위 {overall.avg_rank:.1f}\n\n"
+    )
+
+    for rank, cs in enumerate(recommended, start=1):
+        msg += (
+            f"{rank}. **{char_label(cs.character_num)}** — {cs.games}판, "
+            f"승률 {cs.win_rate * 100:.1f}%, TOP3 {cs.top3_rate * 100:.1f}%, "
+            f"평균 순위 {cs.avg_rank:.1f}\n"
+        )
+
+    msg += "━━━━━━━━━━━━━━━━━━━━"
+
+    await ctx.send(msg, silent=True)
 
 
 from itertools import combinations  # 파일 맨 위쪽에 적어도 되고, 여기에 적어도 작동합니다.
